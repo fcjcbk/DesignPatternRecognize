@@ -25,10 +25,15 @@ class DependencyVariable {
 
 }
 
+class ArrayType {
+
+}
+
 class Tt extends ab implements testt {
     private compose compose;
     private aggre aggre;
     private asso asso;
+    private ArrayType[] arrayTypes;
 
     public Tt() {
         this.compose = new compose();

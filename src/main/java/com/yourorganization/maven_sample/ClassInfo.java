@@ -84,4 +84,16 @@ public class ClassInfo {
     public HashSet<String> getDependency() {
         return dependency;
     }
+
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Class: ").append(className).append("\n");
+        sb.append("Aggregations: ").append(aggregations.toString()).append("\n");
+        sb.append("Associations: ").append(associations).append("\n");
+        sb.append("Compositions: ").append(compositions).append("\n");
+        sb.append("Dependencies: ").append(dependency).append("\n");
+        sb.append("ExtendTypes: ").append(extendTypes).append("\n");
+        sb.append("Implementors: ").append(implementors).append("\n");
+        return sb.toString();
+    }
 }
