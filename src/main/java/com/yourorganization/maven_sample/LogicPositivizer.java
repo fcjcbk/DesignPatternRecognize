@@ -1,6 +1,7 @@
 package com.yourorganization.maven_sample;
 
 
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.PackageDeclaration;
@@ -17,6 +18,7 @@ import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.MethodUsage;
 import com.github.javaparser.resolution.TypeSolver;
+import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
 import com.github.javaparser.resolution.model.SymbolReference;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
@@ -55,56 +57,72 @@ public class LogicPositivizer {
         cu.findAll(ClassOrInterfaceDeclaration.class).forEach(clazz -> {
             clazz.getMethods().forEach(method -> {
                 method.getParameters().forEach(parameter -> {
-                    if (!parameter.getType().resolve().isReferenceType()) {
-                        return;
-                    }
-                    String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                    try {
+                        if (!parameter.getType().resolve().isReferenceType()) {
+                            return;
+                        }
+                        String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
 //                    String paramName = parameter.getNameAsString();
-                    method.getBody().ifPresent(body -> {
-                        body.getStatements().forEach(statement -> {
-                            if (statement.isExpressionStmt()) {
-                                ExpressionStmt exprStmt = statement.asExpressionStmt();
-                                if (exprStmt.getExpression().isAssignExpr()) {
-                                    AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
-                                    if (assignExpr.getTarget().isFieldAccessExpr()) {
-                                        FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
-                                        if (fieldAccessExpr.getScope().isThisExpr()) {
+                        method.getBody().ifPresent(body -> {
+                            body.getStatements().forEach(statement -> {
+                                try {
+                                    if (statement.isExpressionStmt()) {
+                                        ExpressionStmt exprStmt = statement.asExpressionStmt();
+                                        if (exprStmt.getExpression().isAssignExpr()) {
+                                            AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
+                                            if (assignExpr.getTarget().isFieldAccessExpr()) {
+                                                FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
+                                                if (fieldAccessExpr.getScope().isThisExpr()) {
 //                                            ThisExpr thisExpr = fieldAccessExpr.getScope().asThisExpr();
-                                            if (fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName().equals(paramName)) {
-                                                System.out.println("Found method: " + method.getNameAsString() + " parameter: " + parameter.getNameAsString());
+                                                    if (fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName().equals(paramName)) {
+                                                        System.out.println("Found method: " + method.getNameAsString() + " parameter: " + parameter.getNameAsString());
+                                                    }
+                                                }
                                             }
                                         }
                                     }
+                                } catch (UnsolvedSymbolException e) {
+                                    System.out.println(e.getMessage());
                                 }
-                            }
+                            });
                         });
-                    });
+                    } catch (UnsolvedSymbolException e) {
+                        System.out.println(e.getMessage());
+                    }
                 });
             });
             clazz.getConstructors().forEach(constructor -> {
                 constructor.getParameters().forEach(parameter -> {
-                    if (!parameter.getType().resolve().isReferenceType()) {
-                        return;
-                    }
-                    String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                    try {
+                        if (!parameter.getType().resolve().isReferenceType()) {
+                            return;
+                        }
+                        String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
 //                    String paramName = parameter.getNameAsString();
-                    constructor.getBody().getStatements().forEach(statement -> {
-                        if (statement.isExpressionStmt()) {
-                            ExpressionStmt exprStmt = statement.asExpressionStmt();
-                            if (exprStmt.getExpression().isAssignExpr()) {
-                                AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
-                                if (assignExpr.getTarget().isFieldAccessExpr()) {
-                                    FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
-                                    if (fieldAccessExpr.getScope().isThisExpr()) {
+                        constructor.getBody().getStatements().forEach(statement -> {
+                            try {
+                                if (statement.isExpressionStmt()) {
+                                    ExpressionStmt exprStmt = statement.asExpressionStmt();
+                                    if (exprStmt.getExpression().isAssignExpr()) {
+                                        AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
+                                        if (assignExpr.getTarget().isFieldAccessExpr()) {
+                                            FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
+                                            if (fieldAccessExpr.getScope().isThisExpr()) {
 //                                            ThisExpr thisExpr = fieldAccessExpr.getScope().asThisExpr();
-                                        if (fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName().equals(paramName)) {
-                                            System.out.println("Found method: " + constructor.getNameAsString() + "aggregation filed: " + parameter.getNameAsString());
+                                                if (fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName().equals(paramName)) {
+                                                    System.out.println("Found method: " + constructor.getNameAsString() + "aggregation filed: " + parameter.getNameAsString());
+                                                }
+                                            }
                                         }
                                     }
                                 }
+                            } catch (UnsolvedSymbolException e) {
+                                System.out.println(e.getMessage());
                             }
-                        }
-                    });
+                        });
+                    } catch (UnsolvedSymbolException e) {
+                        System.out.println(e.getMessage());
+                    }
                 });
             });
         });
@@ -114,14 +132,19 @@ public class LogicPositivizer {
             clazz.getConstructors().forEach(constructor -> {
                 HashSet<String> params = new HashSet<>();
                 constructor.getParameters().forEach(parameter -> {
-                    if (!parameter.getType().resolve().isReferenceType()) {
-                        return;
+                    try {
+                        if (!parameter.getType().resolve().isReferenceType()) {
+                            return;
+                        }
+                        String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                        params.add(paramName);
+                    } catch (UnsolvedSymbolException e) {
+                        System.out.println(e.getMessage());
                     }
-                    String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
-                    params.add(paramName);
                 });
 //                    String paramName = parameter.getNameAsString();
-                    constructor.getBody().getStatements().forEach(statement -> {
+                constructor.getBody().getStatements().forEach(statement -> {
+                    try {
                         if (statement.isExpressionStmt()) {
                             ExpressionStmt exprStmt = statement.asExpressionStmt();
                             if (exprStmt.getExpression().isAssignExpr()) {
@@ -138,22 +161,45 @@ public class LogicPositivizer {
                                 }
                             }
                         }
-                    });
+                    } catch (UnsolvedSymbolException e) {
+                        System.out.println(e.getMessage());
+                    }
+                });
 
             });
         });
 
     }
 
+    private static ArrayList<File> listJavaFilesRecursively(File directory) {
+        ArrayList<File> resultList = new ArrayList<>();
+        File[] files = directory.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    resultList.addAll(listJavaFilesRecursively(file));
+                } else if (file.getName().endsWith(".java")) {
+                    resultList.add(file);
+                }
+            }
+        }
+        return resultList;
+    }
+
     public static void main(String[] args) throws FileNotFoundException {
+
+//        String projectPath = "src/main/resources";
+        String projectPath = "/Users/bytedance/codefile/learn/emotion_master/src/main/java";
+
         // 解析 Java 源文件
         FileInputStream in = new FileInputStream("src/main/resources/Test.java");
 
 //        FileInputStream in = new FileInputStream("D:\\codefile\\archive\\emotion_master\\src\\main\\java\\com\\project\\controller\\employeeBasicController.java");
 
+        StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
 //        TypeSolver javaParserTypeSolver = new JavaParserTypeSolver(new File("D:\\codefile\\archive\\emotion_master\\src\\main\\java"));
-        TypeSolver javaParserTypeSolver = new JavaParserTypeSolver(new File("src/main/resources"));
+        TypeSolver javaParserTypeSolver = new JavaParserTypeSolver(new File(projectPath));
 
         combinedTypeSolver.add(new ReflectionTypeSolver());
         combinedTypeSolver.add(javaParserTypeSolver);
@@ -161,49 +207,72 @@ public class LogicPositivizer {
         JavaSymbolSolver symbolSolver = new JavaSymbolSolver(combinedTypeSolver);
         StaticJavaParser.getParserConfiguration().setSymbolResolver(symbolSolver);
 
-        CompilationUnit cu = StaticJavaParser.parse(in);
+        listJavaFilesRecursively(new File(projectPath)).forEach(file -> {
+            try {
+                FileInputStream in1 = new FileInputStream(file);
+                CompilationUnit cu = StaticJavaParser.parse(in1);
+                cu.findAll(ClassOrInterfaceDeclaration.class).forEach(clazz -> {
+                    String className = clazz.resolve().getQualifiedName();
+                    allClass.add(className);
+                    System.out.println("Class: " + className);
 
-        PackageDeclaration packageDeclaration = cu.getPackageDeclaration().orElse(null);
+                });
 
-        // 打印包名
-        if (packageDeclaration != null) {
-            System.out.println("Package Name: " + packageDeclaration.getName());
-        } else {
-            System.out.println("No package declaration found.");
-        }
-
-        cu.findAll(ClassOrInterfaceDeclaration.class).forEach(clazz -> {
-            String className = clazz.resolve().getQualifiedName();
-            allClass.add(className);
-            System.out.println("Class: " + className);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
 
         });
+
+
+//        CompilationUnit cu = StaticJavaParser.parse(in);
+//        PackageDeclaration packageDeclaration = cu.getPackageDeclaration().orElse(null);
+//        // 打印包名
+//        if (packageDeclaration != null) {
+//            System.out.println("Package Name: " + packageDeclaration.getName());
+//        } else {
+//            System.out.println("No package declaration found.");
+//        }
+//
+//        cu.findAll(ClassOrInterfaceDeclaration.class).forEach(clazz -> {
+//            String className = clazz.resolve().getQualifiedName();
+//            allClass.add(className);
+//            System.out.println("Class: " + className);
+//
+//        });
+
         ArrayList<ClassInfo> classInfos = new ArrayList<>();
         // 遍历 CompilationUnit 中的类声明
-        cu.accept(new ClassVisitor(), classInfos);
+        listJavaFilesRecursively(new File(projectPath)).forEach(file -> {
+            try {
+                FileInputStream in1 = new FileInputStream(file);
+                CompilationUnit cu = StaticJavaParser.parse(in1);
+                cu.accept(new ClassVisitor(), classInfos);
+            } catch (FileNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+
+        });
 
         // 输出所有静态方法调用表达式及其所属的类
         // Todo: 存在问题
-        for (MethodCallExpr mc : methodCalls) {
-//            try {
-                ResolvedMethodDeclaration resolvedMethodDecl = mc.resolve();
-                if (resolvedMethodDecl.isStatic()) {
-                    System.out.println("Static method call found: " + mc.getName() + " in class " +
-                            resolvedMethodDecl.getClassName());
-                }
-//            } catch (Exception e) {
-//                System.err.println("Unable to resolve method call: " + mc.toString());
-//            }
-        }
+//        for (MethodCallExpr mc : methodCalls) {
+//                ResolvedMethodDeclaration resolvedMethodDecl = mc.resolve();
+//                if (resolvedMethodDecl.isStatic()) {
+//                    System.out.println("Static method call found: " + mc.getName() + " in class " +
+//                            resolvedMethodDecl.getClassName());
+//                }
+//        }
 
         classInfos.forEach(classInfo -> {
             System.out.println(classInfo.toString());
         });
 
+        System.out.println("class size: " + allClass.size());
+        System.out.println("class size: " + classInfos.size());
 //        FieldDeclaration fieldDeclaration  = Navigator.demandNodeOfGivenClass(cu, FieldDeclaration.class);
 //        System.out.println(fieldDeclaration.getVariables().get(0).getType().resolve().asReferenceType().getQualifiedName());
     }
-    static ArrayList<MethodCallExpr> methodCalls = new ArrayList<>();
 
     private static class LocalVariableCollector extends VoidVisitorAdapter<Void> {
         private ArrayList<VariableDeclarator> variables = new java.util.ArrayList<>();
@@ -224,17 +293,27 @@ public class LogicPositivizer {
         @Override
         public void visit(MethodCallExpr methodCall, ClassInfo classInfo) {
             super.visit(methodCall, classInfo);
-            ResolvedMethodDeclaration resolvedMethodDecl = methodCall.resolve();
-            if (resolvedMethodDecl.isStatic()) {
-                System.out.println("Static method call found: " + methodCall.getName() + " in class " +
-                        resolvedMethodDecl.declaringType().getQualifiedName());
+            try {
+                ResolvedMethodDeclaration resolvedMethodDecl = methodCall.resolve();
+                if (resolvedMethodDecl.isStatic()) {
+//                System.out.println("Static method call found: " + methodCall.getName() + " in class " +
+//                        resolvedMethodDecl.declaringType().getQualifiedName());
+                    String qualifiedName = resolvedMethodDecl.declaringType().getQualifiedName();
+                    if (!allClass.contains(qualifiedName)) {
+                        return;
+                    }
+                    classInfo.CheckAndAddDependency(qualifiedName);
+                }
+            } catch (UnsolvedSymbolException e) {
+                System.err.println("Unable to resolve method call: " + e.getMessage() + " " + methodCall);
             }
-            classInfo.CheckAndAddDependency(resolvedMethodDecl.declaringType().getQualifiedName());
+
 
         }
     }
 
     private static void checkStatementAndAddAggregation(Statement statement, ClassInfo classInfo, String paramType) {
+        try {
         if (statement.isExpressionStmt()) {
             ExpressionStmt exprStmt = statement.asExpressionStmt();
             if (exprStmt.getExpression().isAssignExpr()) {
@@ -242,7 +321,6 @@ public class LogicPositivizer {
                 if (assignExpr.getTarget().isFieldAccessExpr()) {
                     FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
                     if (fieldAccessExpr.getScope().isThisExpr()) {
-//                                            ThisExpr thisExpr = fieldAccessExpr.getScope().asThisExpr();
                         if (fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName().equals(paramType)) {
                             classInfo.AddAggregation(paramType);
                         }
@@ -250,11 +328,15 @@ public class LogicPositivizer {
                 }
             }
         }
+        } catch (UnsolvedSymbolException e) {
+            System.err.println("Unable to resolve variable: " + e.getMessage() + " " + statement);
+        }
 
     }
 
     // 收集局部变量的访问者类
     private static HashSet<String> allClass = new HashSet<>();
+
     private static class ClassVisitor extends VoidVisitorAdapter<ArrayList<ClassInfo>> {
         @Override
         public void visit(ClassOrInterfaceDeclaration n, ArrayList<ClassInfo> arg) {
@@ -277,26 +359,33 @@ public class LogicPositivizer {
                 // 获取所有局部变量声明
                 ArrayList<VariableDeclarator> variables = collector.getVariables();
                 for (VariableDeclarator var : variables) {
-                    String qualifiedName = var.getType().resolve().asReferenceType().getQualifiedName();
-                    if (!allClass.contains(qualifiedName)) {
-                        return;
+                    try {
+                        if (!var.getType().resolve().isReferenceType()) {
+                            continue;
+                        }
+                        String qualifiedName = var.getType().resolve().asReferenceType().getQualifiedName();
+                        if (!allClass.contains(qualifiedName)) {
+                            return;
+                        }
+                        classInfo.CheckAndAddDependency(qualifiedName);
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve variable: " + e.getMessage() + " " + var);
                     }
-                    classInfo.CheckAndAddDependency(qualifiedName);
                 }
 
                 method.getParameters().forEach(parameter -> {
-                    if (!parameter.getType().resolve().isReferenceType()) {
-                        return;
-                    }
-                    String paramType = parameter.getType().resolve().asReferenceType().getQualifiedName();
-                    if (!allClass.contains(paramType)) {
-                        return;
-                    }
-
-//                    String paramName = parameter.getNameAsString();
-                    method.getBody().ifPresent(body -> {
-                        body.getStatements().forEach(statement -> {
-                            checkStatementAndAddAggregation(statement, classInfo, paramType);
+                    String parameterType = "";
+                    try {
+                        if (!parameter.getType().resolve().isReferenceType()) {
+                            return;
+                        }
+                        String paramType = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                        if (!allClass.contains(paramType)) {
+                            return;
+                        }
+                        method.getBody().ifPresent(body -> {
+                            body.getStatements().forEach(statement -> {
+                                checkStatementAndAddAggregation(statement, classInfo, paramType);
 
 //                            if (statement.isExpressionStmt()) {
 //                                ExpressionStmt exprStmt = statement.asExpressionStmt();
@@ -305,7 +394,6 @@ public class LogicPositivizer {
 //                                    if (assignExpr.getTarget().isFieldAccessExpr()) {
 //                                        FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
 //                                        if (fieldAccessExpr.getScope().isThisExpr()) {
-////                                            ThisExpr thisExpr = fieldAccessExpr.getScope().asThisExpr();
 //                                            if (fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName().equals(paramType)) {
 //                                                System.out.println("Found method: " + method.getNameAsString() + " parameter: " + parameter.getNameAsString());
 //                                                classInfo.AddAggregation(paramType);
@@ -314,23 +402,31 @@ public class LogicPositivizer {
 //                                    }
 //                                }
 //                            }
+                            });
                         });
-                    });
-                    classInfo.CheckAndAddDependency(paramType);
+                        classInfo.CheckAndAddDependency(paramType);
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve parameter: " + e.getMessage() + " "+ parameter);
+                    }
+
+
+//                    String paramName = parameter.getNameAsString();
+
                 });
             });
             n.getConstructors().forEach(constructor -> {
                 constructor.getParameters().forEach(parameter -> {
-                    if (!parameter.getType().resolve().isReferenceType()) {
-                        return;
-                    }
-                    String paramType = parameter.getType().resolve().asReferenceType().getQualifiedName();
-                    if (!allClass.contains(paramType)) {
-                        return;
-                    }
+                    try {
+                        if (!parameter.getType().resolve().isReferenceType()) {
+                            return;
+                        }
+                        String paramType = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                        if (!allClass.contains(paramType)) {
+                            return;
+                        }
 //                    String paramName = parameter.getNameAsString();
-                    constructor.getBody().getStatements().forEach(statement -> {
-                        checkStatementAndAddAggregation(statement, classInfo, paramType);
+                        constructor.getBody().getStatements().forEach(statement -> {
+                            checkStatementAndAddAggregation(statement, classInfo, paramType);
 //                        if (statement.isExpressionStmt()) {
 //                            ExpressionStmt exprStmt = statement.asExpressionStmt();
 //                            if (exprStmt.getExpression().isAssignExpr()) {
@@ -346,7 +442,11 @@ public class LogicPositivizer {
 //                                }
 //                            }
 //                        }
-                    });
+                        });
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve constructor: "+ e.getMessage() + " " + constructor);
+                    }
+
                 });
             });
 
@@ -354,33 +454,42 @@ public class LogicPositivizer {
             n.getConstructors().forEach(constructor -> {
                 HashSet<String> params = new HashSet<>();
                 constructor.getParameters().forEach(parameter -> {
-                    if (!parameter.getType().resolve().isReferenceType()) {
-                        return;
+                    try {
+
+                        if (!parameter.getType().resolve().isReferenceType()) {
+                            return;
+                        }
+                        String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                        if (!allClass.contains(paramName)) {
+                            return;
+                        }
+                        params.add(paramName);
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve constructor: " + e.getMessage() + " " + constructor);
                     }
-                    String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
-                    if (!allClass.contains(paramName)) {
-                        return;
-                    }
-                    params.add(paramName);
                 });
 //                    String paramName = parameter.getNameAsString();
                 constructor.getBody().getStatements().forEach(statement -> {
-                    if (statement.isExpressionStmt()) {
-                        ExpressionStmt exprStmt = statement.asExpressionStmt();
-                        if (exprStmt.getExpression().isAssignExpr()) {
-                            AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
-                            if (assignExpr.getTarget().isFieldAccessExpr()) {
-                                FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
-                                if (fieldAccessExpr.getScope().isThisExpr()) {
+                    try {
+                        if (statement.isExpressionStmt()) {
+                            ExpressionStmt exprStmt = statement.asExpressionStmt();
+                            if (exprStmt.getExpression().isAssignExpr()) {
+                                AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
+                                if (assignExpr.getTarget().isFieldAccessExpr()) {
+                                    FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
+                                    if (fieldAccessExpr.getScope().isThisExpr()) {
 //                                            ThisExpr thisExpr = fieldAccessExpr.getScope().asThisExpr();
-                                    String field = fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName();
-                                    if (!params.contains(field)) {
-                                        System.out.println("compose field: " + field);
-                                        classInfo.AddComposition(field);
+                                        String field = fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName();
+                                        if (!params.contains(field)) {
+                                            System.out.println("compose field: " + field);
+                                            classInfo.AddComposition(field);
+                                        }
                                     }
                                 }
                             }
                         }
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve constructor: " + e.getMessage() + " " + constructor);
                     }
                 });
 
@@ -402,7 +511,6 @@ public class LogicPositivizer {
             });
 
 
-
             // 获取继承的类
             n.getExtendedTypes().forEach(extendedType -> {
                 String parentClass = extendedType.resolve().asReferenceType().getQualifiedName();
@@ -414,11 +522,16 @@ public class LogicPositivizer {
 
             // 获取实现的接口
             n.getImplementedTypes().forEach(implementedType -> {
-                String interfaceName = implementedType.resolve().asReferenceType().getQualifiedName();
-                if (!allClass.contains(interfaceName)) {
-                    return;
+                try {
+                    String interfaceName = implementedType.resolve().asReferenceType().getQualifiedName();
+                    if (!allClass.contains(interfaceName)) {
+                        return;
+                    }
+                    classInfo.AddImplementor(interfaceName);
+                } catch (UnsolvedSymbolException e) {
+                    System.err.println("Unable to resolve parameter: " + e.getMessage() + " " + implementedType);
                 }
-                classInfo.AddImplementor(interfaceName);
+
             });
 
 
@@ -433,33 +546,36 @@ public class LogicPositivizer {
 
     private static String getQualifiedName(Type type) {
         String qualifiedName = "";
-        if (type.resolve().isReferenceType()) {
-            qualifiedName = type.resolve().asReferenceType().getQualifiedName();
-            return qualifiedName;
-        }
-
-        // 处理泛型
-        // 泛型取第一个处理
-        if (type instanceof ClassOrInterfaceType) {
-            ClassOrInterfaceType classType = (ClassOrInterfaceType) type;
-            if (classType.getTypeArguments().isPresent() &&  classType.getTypeArguments().get().getFirst().isPresent()) {
-                qualifiedName = classType.getTypeArguments().get().getFirst().get().resolve().asReferenceType().getQualifiedName();
+        try {
+            if (type.resolve().isReferenceType()) {
+                qualifiedName = type.resolve().asReferenceType().getQualifiedName();
+                return qualifiedName;
             }
-            return qualifiedName;
-        }
 
-        // 处理数组
-        if (type instanceof ArrayType) {
-            ArrayType arrayType = (ArrayType) type;
-            Type componentType = arrayType.getComponentType();
-            if (componentType instanceof ClassOrInterfaceType) {
-                ClassOrInterfaceType classType = (ClassOrInterfaceType) componentType;
+            // 处理泛型
+            // 泛型取第一个处理
+            if (type instanceof ClassOrInterfaceType) {
+                ClassOrInterfaceType classType = (ClassOrInterfaceType) type;
+                if (classType.getTypeArguments().isPresent() && classType.getTypeArguments().get().getFirst().isPresent()) {
+                    qualifiedName = classType.getTypeArguments().get().getFirst().get().resolve().asReferenceType().getQualifiedName();
+                }
+                return qualifiedName;
+            }
+
+            // 处理数组
+            if (type instanceof ArrayType) {
+                ArrayType arrayType = (ArrayType) type;
+                Type componentType = arrayType.getComponentType();
+                if (componentType instanceof ClassOrInterfaceType) {
+                    ClassOrInterfaceType classType = (ClassOrInterfaceType) componentType;
 //                System.out.println("Hit array Qualified name: " + classType.resolve().asReferenceType().getQualifiedName() + "[]");
-                qualifiedName = classType.resolve().asReferenceType().getQualifiedName();
+                    qualifiedName = classType.resolve().asReferenceType().getQualifiedName();
+                }
+                return qualifiedName;
             }
-            return qualifiedName;
+        } catch (UnsolvedSymbolException e) {
+            System.err.println("Unable to resolve parameter: " + e.getMessage() + " " + type);
         }
-
         // not found
         return "not found";
     }
