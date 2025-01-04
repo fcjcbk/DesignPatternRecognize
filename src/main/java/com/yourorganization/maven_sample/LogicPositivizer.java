@@ -53,7 +53,8 @@ public class LogicPositivizer {
     public static void main(String[] args) throws FileNotFoundException {
 
 //        String projectPath = "src/main/resources";
-        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
+//        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
+          String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
         StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
@@ -195,7 +196,7 @@ public class LogicPositivizer {
                     }
                     classInfo.CheckAndAddDependency(qualifiedName);
                 }
-            } catch (UnsolvedSymbolException e) {
+            } catch (Exception e) {
                 System.err.println("Unable to resolve method call: " + e.getMessage() + " " + methodCall);
             }
 
@@ -343,11 +344,15 @@ public class LogicPositivizer {
 
             // 获取继承的类
             n.getExtendedTypes().forEach(extendedType -> {
-                String parentClass = extendedType.resolve().asReferenceType().getQualifiedName();
-                if (!allClass.contains(parentClass)) {
-                    return;
+                try {
+                    String parentClass = extendedType.resolve().asReferenceType().getQualifiedName();
+                    if (!allClass.contains(parentClass)) {
+                        return;
+                    }
+                    classInfo.AddExtendType(parentClass);
+                }catch (UnsolvedSymbolException e) {
+                    System.err.println("Unable to resolve extended type: " + e.getMessage() + " " + extendedType);
                 }
-                classInfo.AddExtendType(parentClass);
             });
 
             // 获取实现的接口
