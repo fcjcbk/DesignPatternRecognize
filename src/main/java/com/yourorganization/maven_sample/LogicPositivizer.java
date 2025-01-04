@@ -52,9 +52,9 @@ public class LogicPositivizer {
 
     public static void main(String[] args) throws FileNotFoundException {
 
-//        String projectPath = "src/main/resources";
+        String projectPath = "src/main/resources/design_pattern";
 //        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
-          String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
+//          String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
         StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
@@ -250,11 +250,9 @@ public class LogicPositivizer {
                         if (!allClass.contains(paramType)) {
                             return;
                         }
-                        method.getBody().ifPresent(body -> {
-                            body.getStatements().forEach(statement -> {
-                                checkStatementAndAddAggregation(statement, classInfo, paramType);
-                            });
-                        });
+                        method.getBody().ifPresent(body -> body.getStatements().forEach(statement -> {
+                            checkStatementAndAddAggregation(statement, classInfo, paramType);
+                        }));
                         classInfo.CheckAndAddDependency(paramType);
                     } catch (UnsolvedSymbolException e) {
                         System.err.println("Unable to resolve parameter: " + e.getMessage() + " " + parameter);
@@ -286,7 +284,6 @@ public class LogicPositivizer {
                 HashSet<String> params = new HashSet<>();
                 constructor.getParameters().forEach(parameter -> {
                     try {
-
                         if (!parameter.getType().resolve().isReferenceType()) {
                             return;
                         }
