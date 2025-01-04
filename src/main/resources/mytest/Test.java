@@ -36,7 +36,7 @@ class Tt extends ab implements testt {
     private ArrayType[] arrayTypes;
 
     public Tt() {
-        this.compose = new compose();
+        compose = new compose();
     }
 
     public void setAggre(aggre aggre) {

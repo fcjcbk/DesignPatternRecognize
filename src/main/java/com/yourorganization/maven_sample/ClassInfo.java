@@ -34,7 +34,10 @@ public class ClassInfo {
     public void AddAggregation(String aggregation) {
         aggregations.add(aggregation);
     }
-    public void AddAssociation(String association) {
+    public void CheckAndAddAssociation(String association) {
+        if (compositions.contains(association) || aggregations.contains(association)) {
+            return;
+        }
         associations.add(association);
     }
 
@@ -47,7 +50,7 @@ public class ClassInfo {
     }
 
     public void CheckAndAddDependency(String dependencyType) {
-        if (aggregations.contains(dependencyType)) {
+        if (aggregations.contains(dependencyType) || compositions.contains(dependencyType)) {
             return;
         }
         dependency.add(dependencyType);

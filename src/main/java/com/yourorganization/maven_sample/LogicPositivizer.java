@@ -9,6 +9,7 @@ import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AssignExpr;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ArrayType;
@@ -31,9 +32,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 
 public class LogicPositivizer {
-
     // 收集局部变量的访问者类
     private static HashSet<String> allClass = new HashSet<>();
+    final String NOT_FOUND = "not_found";
 
     private static ArrayList<File> listJavaFilesRecursively(File directory) {
         ArrayList<File> resultList = new ArrayList<>();
@@ -52,9 +53,10 @@ public class LogicPositivizer {
 
     public static void main(String[] args) throws FileNotFoundException {
 
-        String projectPath = "src/main/resources/design_pattern";
+//        String projectPath = "src/main/resources/mytest";
+//        String projectPath = "src/main/resources/design_pattern";
 //        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
-//          String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
+        String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
         StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
@@ -140,8 +142,8 @@ public class LogicPositivizer {
 
             // 处理泛型
             // 泛型取第一个处理
-            if (type instanceof ClassOrInterfaceType) {
-                ClassOrInterfaceType classType = (ClassOrInterfaceType) type;
+            if (type.isClassOrInterfaceType()) {
+                ClassOrInterfaceType classType = type.asClassOrInterfaceType();
                 if (classType.getTypeArguments().isPresent() && classType.getTypeArguments().get().getFirst().isPresent()) {
                     qualifiedName = classType.getTypeArguments().get().getFirst().get().resolve().asReferenceType().getQualifiedName();
                 }
@@ -149,11 +151,11 @@ public class LogicPositivizer {
             }
 
             // 处理数组
-            if (type instanceof ArrayType) {
-                ArrayType arrayType = (ArrayType) type;
+            if (type.isArrayType()) {
+                ArrayType arrayType = type.asArrayType();
                 Type componentType = arrayType.getComponentType();
-                if (componentType instanceof ClassOrInterfaceType) {
-                    ClassOrInterfaceType classType = (ClassOrInterfaceType) componentType;
+                if (componentType.isClassOrInterfaceType()) {
+                    ClassOrInterfaceType classType = componentType.asClassOrInterfaceType();
 //                System.out.println("Hit array Qualified name: " + classType.resolve().asReferenceType().getQualifiedName() + "[]");
                     qualifiedName = classType.resolve().asReferenceType().getQualifiedName();
                 }
@@ -163,11 +165,11 @@ public class LogicPositivizer {
             System.err.println("Unable to resolve parameter: " + e.getMessage() + " " + type);
         }
         // not found
-        return "not found";
+        return "not_found";
     }
 
     private static class LocalVariableCollector extends VoidVisitorAdapter<Void> {
-        private ArrayList<VariableDeclarator> variables = new java.util.ArrayList<>();
+        final private ArrayList<VariableDeclarator> variables = new java.util.ArrayList<>();
 
         @Override
         public void visit(VariableDeclarator n, Void arg) {
@@ -204,9 +206,42 @@ public class LogicPositivizer {
         }
     }
 
+    private static class AssignExprVisitor extends VoidVisitorAdapter<Void> {
+        final private HashSet<String> fields = new HashSet<>();
+
+        @Override
+        public void visit(AssignExpr assignExpr, Void arg) {
+            super.visit(assignExpr, arg);
+            try {
+
+                if (assignExpr.getTarget().isFieldAccessExpr()) {
+                    FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
+                    if (fieldAccessExpr.resolve().getType().isReferenceType()) {
+                        String field = fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName();
+                        fields.add(field);
+                    }
+                } else if (assignExpr.getTarget().isNameExpr()) {
+                    // Todo: 对静态成员变量做处理
+                    NameExpr nameExpr = assignExpr.getTarget().asNameExpr();
+                    if (nameExpr.resolve().isField()) {
+                        fields.add(nameExpr.resolve().getType().asReferenceType().getQualifiedName());
+                    }
+
+                }
+            } catch (Exception e) {
+                System.err.println("Unable to resolve variable: " + e.getMessage() + " " + assignExpr);
+            }
+
+        }
+
+        public HashSet<String> getFields() {
+            return fields;
+        }
+    }
+
     private static class ClassVisitor extends VoidVisitorAdapter<HashMap<String, ClassInfo>> {
         @Override
-        public void visit(ClassOrInterfaceDeclaration n,HashMap<String, ClassInfo> arg) {
+        public void visit(ClassOrInterfaceDeclaration n, HashMap<String, ClassInfo> arg) {
             super.visit(n, arg);
 
 
@@ -218,76 +253,13 @@ public class LogicPositivizer {
             arg.put(className, classInfo);
 
             // 获取聚合类型 同时寻找依赖类型: 1. 使用其他类的静态方法 (done) 2. 接受其他类作为函数参数(done) 3. 使用其他类的局部变量 (done)
-            n.getMethods().forEach(method -> {
-                method.accept(new MethodCallVisitor(), classInfo);
-
-                LocalVariableCollector collector = new LocalVariableCollector();
-                method.accept(collector, null);
-                // 获取所有局部变量声明
-                ArrayList<VariableDeclarator> variables = collector.getVariables();
-                for (VariableDeclarator var : variables) {
-                    try {
-                        if (!var.getType().resolve().isReferenceType()) {
-                            continue;
-                        }
-                        String qualifiedName = var.getType().resolve().asReferenceType().getQualifiedName();
-                        if (!allClass.contains(qualifiedName)) {
-                            return;
-                        }
-                        classInfo.CheckAndAddDependency(qualifiedName);
-                    } catch (UnsolvedSymbolException e) {
-                        System.err.println("Unable to resolve variable: " + e.getMessage() + " " + var);
-                    }
-                }
-
-                method.getParameters().forEach(parameter -> {
-                    String parameterType = "";
-                    try {
-                        if (!parameter.getType().resolve().isReferenceType()) {
-                            return;
-                        }
-                        String paramType = parameter.getType().resolve().asReferenceType().getQualifiedName();
-                        if (!allClass.contains(paramType)) {
-                            return;
-                        }
-                        method.getBody().ifPresent(body -> body.getStatements().forEach(statement -> {
-                            checkStatementAndAddAggregation(statement, classInfo, paramType);
-                        }));
-                        classInfo.CheckAndAddDependency(paramType);
-                    } catch (UnsolvedSymbolException e) {
-                        System.err.println("Unable to resolve parameter: " + e.getMessage() + " " + parameter);
-                    }
-                });
-            });
-            n.getConstructors().forEach(constructor -> {
-                constructor.getParameters().forEach(parameter -> {
-                    try {
-                        if (!parameter.getType().resolve().isReferenceType()) {
-                            return;
-                        }
-                        String paramType = parameter.getType().resolve().asReferenceType().getQualifiedName();
-                        if (!allClass.contains(paramType)) {
-                            return;
-                        }
-                        constructor.getBody().getStatements().forEach(statement -> {
-                            checkStatementAndAddAggregation(statement, classInfo, paramType);
-                        });
-                    } catch (UnsolvedSymbolException e) {
-                        System.err.println("Unable to resolve constructor: " + e.getMessage() + " " + constructor);
-                    }
-
-                });
-            });
 
             // 获取组合
             n.getConstructors().forEach(constructor -> {
                 HashSet<String> params = new HashSet<>();
                 constructor.getParameters().forEach(parameter -> {
                     try {
-                        if (!parameter.getType().resolve().isReferenceType()) {
-                            return;
-                        }
-                        String paramName = parameter.getType().resolve().asReferenceType().getQualifiedName();
+                        String paramName = getQualifiedName(parameter.getType());
                         if (!allClass.contains(paramName)) {
                             return;
                         }
@@ -296,31 +268,116 @@ public class LogicPositivizer {
                         System.err.println("Unable to resolve constructor: " + e.getMessage() + " " + constructor);
                     }
                 });
-//                    String paramName = parameter.getNameAsString();
-                constructor.getBody().getStatements().forEach(statement -> {
+
+                AssignExprVisitor assignExprVisitor = new AssignExprVisitor();
+                constructor.accept(assignExprVisitor, null);
+                for (String field : assignExprVisitor.getFields()) {
+                    if (!allClass.contains(field)) {
+                        continue;
+                    }
+                    if (!params.contains(field)) {
+                        // 赋值变量从函数参数中获取
+                        System.out.println("compose field: " + field);
+                        classInfo.AddComposition(field);
+                    } else {
+                        // 赋值变量未从函数参数中获取
+                        System.out.println("aggregation field: " + field);
+                        classInfo.AddAggregation(field);
+                    }
+                }
+
+                for (String param : params) {
+                    if (!allClass.contains(param) || !assignExprVisitor.getFields().contains(param)) {
+                        continue;
+                    }
+                    // 函数参数未用于赋值 -> 依赖
+                    classInfo.CheckAndAddDependency(param);
+
+                }
+
+                // 获取依赖关系中静态函数调用
+                constructor.accept(new MethodCallVisitor(), classInfo);
+
+                // 获取依赖关系中局部变量
+                LocalVariableCollector collector = new LocalVariableCollector();
+                constructor.accept(collector, null);
+                // 获取所有局部变量声明
+                ArrayList<VariableDeclarator> variables = collector.getVariables();
+                for (VariableDeclarator var : variables) {
                     try {
-                        if (statement.isExpressionStmt()) {
-                            ExpressionStmt exprStmt = statement.asExpressionStmt();
-                            if (exprStmt.getExpression().isAssignExpr()) {
-                                AssignExpr assignExpr = exprStmt.getExpression().asAssignExpr();
-                                if (assignExpr.getTarget().isFieldAccessExpr()) {
-                                    FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
-                                    if (fieldAccessExpr.getScope().isThisExpr()
-                                            && fieldAccessExpr.resolve().getType().isReferenceType()) {
-                                        String field = fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName();
-                                        if (allClass.contains(field) && !params.contains(field)) {
-                                            System.out.println("compose field: " + field);
-                                            classInfo.AddComposition(field);
-                                        }
-                                    }
-                                }
-                            }
+                        String qualifiedName = getQualifiedName(var.getType());
+                        if (!allClass.contains(qualifiedName)) {
+                            continue;
                         }
+                        classInfo.CheckAndAddDependency(qualifiedName);
                     } catch (UnsolvedSymbolException e) {
-                        System.err.println("Unable to resolve constructor: " + e.getMessage() + " " + constructor);
+                        System.err.println("Unable to resolve variable: " + e.getMessage() + " " + var);
+                    }
+                }
+
+            });
+
+            // 组合也可能在函数中出现
+            n.getMethods().forEach(method -> {
+                // 获取组合、聚合、依赖类型
+                HashSet<String> params = new HashSet<>();
+                method.getParameters().forEach(parameter -> {
+                    try {
+                        String paramName = getQualifiedName(parameter.getType());
+                        if (!allClass.contains(paramName)) {
+                            return;
+                        }
+                        params.add(paramName);
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve method: " + e.getMessage() + " " + method);
                     }
                 });
 
+                AssignExprVisitor assignExprVisitor = new AssignExprVisitor();
+                method.accept(assignExprVisitor, null);
+                for (String field : assignExprVisitor.getFields()) {
+                    if (!allClass.contains(field)) {
+                        continue;
+                    }
+                    if (!params.contains(field)) {
+                        // 赋值变量从函数参数中获取 -> 聚合
+                        System.out.println("compose field: " + field);
+                        classInfo.AddComposition(field);
+                    } else {
+                        // 赋值变量未从函数参数中获取 -> 组合
+                        System.out.println("aggregation field: " + field);
+                        classInfo.AddAggregation(field);
+                    }
+                }
+
+                for (String param : params) {
+                    if (!allClass.contains(param)) {
+                        continue;
+                    }
+                    // 函数参数未用于赋值 -> 依赖
+                    classInfo.CheckAndAddDependency(param);
+
+                }
+
+                // 获取依赖关系中静态函数调用
+                method.accept(new MethodCallVisitor(), classInfo);
+
+                // 获取依赖关系中局部变量
+                LocalVariableCollector collector = new LocalVariableCollector();
+                method.accept(collector, null);
+                // 获取所有局部变量声明
+                ArrayList<VariableDeclarator> variables = collector.getVariables();
+                for (VariableDeclarator var : variables) {
+                    try {
+                        String qualifiedName = getQualifiedName(var.getType());
+                        if (!allClass.contains(qualifiedName)) {
+                            continue;
+                        }
+                        classInfo.CheckAndAddDependency(qualifiedName);
+                    } catch (UnsolvedSymbolException e) {
+                        System.err.println("Unable to resolve variable: " + e.getMessage() + " " + var);
+                    }
+                }
             });
 
             // 既不是聚合也不是组合的成员变量
@@ -331,15 +388,10 @@ public class LogicPositivizer {
                         return;
                     }
 
-                    if (!classInfo.getAggregations().contains(qualifiedName) &&
-                            !classInfo.getCompositions().contains(qualifiedName)) {
-                        classInfo.AddAssociation(qualifiedName);
-                    }
+                    classInfo.CheckAndAddAssociation(qualifiedName);
                 });
             });
 
-
-            // 获取继承的类
             n.getExtendedTypes().forEach(extendedType -> {
                 try {
                     String parentClass = extendedType.resolve().asReferenceType().getQualifiedName();
@@ -347,7 +399,7 @@ public class LogicPositivizer {
                         return;
                     }
                     classInfo.AddExtendType(parentClass);
-                }catch (UnsolvedSymbolException e) {
+                } catch (UnsolvedSymbolException e) {
                     System.err.println("Unable to resolve extended type: " + e.getMessage() + " " + extendedType);
                 }
             });
