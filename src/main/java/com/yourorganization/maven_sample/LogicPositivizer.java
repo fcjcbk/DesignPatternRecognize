@@ -19,6 +19,8 @@ import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import com.github.javaparser.resolution.TypeSolver;
 import com.github.javaparser.resolution.UnsolvedSymbolException;
 import com.github.javaparser.resolution.declarations.ResolvedMethodDeclaration;
+import com.github.javaparser.resolution.types.ResolvedReferenceType;
+import com.github.javaparser.resolution.types.ResolvedType;
 import com.github.javaparser.symbolsolver.JavaSymbolSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
@@ -27,9 +29,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeS
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.*;
 
 public class LogicPositivizer {
     // 收集局部变量的访问者类
@@ -53,10 +53,10 @@ public class LogicPositivizer {
 
     public static void main(String[] args) throws FileNotFoundException {
 
-//        String projectPath = "src/main/resources/mytest";
+        String projectPath = "src/main/resources/mytest";
 //        String projectPath = "src/main/resources/design_pattern";
 //        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
-        String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
+//        String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
         StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
         CombinedTypeSolver combinedTypeSolver = new CombinedTypeSolver();
@@ -132,21 +132,55 @@ public class LogicPositivizer {
 
     }
 
+private static boolean implementsListOrSetInterface(ResolvedReferenceType resolvedType) {
+//        System.out.println(resolvedType.getQualifiedName() + " ancestor: ");
+        for (ResolvedReferenceType ancestor : resolvedType.getAllAncestors()) {
+//            System.out.println(ancestor.getQualifiedName());
+            if (ancestor.getQualifiedName().equals(List.class.getCanonicalName())
+                    || ancestor.getQualifiedName().equals(Set.class.getCanonicalName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean implementsMapInterface(ResolvedReferenceType resolvedType) {
+//        System.out.println(resolvedType.getQualifiedName() + " ancestor: ");
+        for (ResolvedReferenceType ancestor : resolvedType.getAllAncestors()) {
+//            System.out.println(ancestor.getQualifiedName());
+            if (ancestor.getQualifiedName().equals(Map.class.getCanonicalName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static String getQualifiedName(Type type) {
         String qualifiedName = "";
         try {
-            if (type.resolve().isReferenceType()) {
-                qualifiedName = type.resolve().asReferenceType().getQualifiedName();
-                return qualifiedName;
-            }
-
             // 处理泛型
             // 泛型取第一个处理
             if (type.isClassOrInterfaceType()) {
                 ClassOrInterfaceType classType = type.asClassOrInterfaceType();
-                if (classType.getTypeArguments().isPresent() && classType.getTypeArguments().get().getFirst().isPresent()) {
-                    qualifiedName = classType.getTypeArguments().get().getFirst().get().resolve().asReferenceType().getQualifiedName();
+                if (implementsListOrSetInterface(type.resolve().asReferenceType())
+                        && classType.getTypeArguments().isPresent()
+                        && classType.getTypeArguments().get().getFirst().isPresent()
+                ) {
+                        qualifiedName = classType.getTypeArguments().get().getFirst().get().resolve().asReferenceType().getQualifiedName();
+                        return qualifiedName;
+
+                } else if (implementsMapInterface(type.resolve().asReferenceType())
+                        && classType.getTypeArguments().isPresent()
+                        && classType.getTypeArguments().get().size() >= 2
+                ) {
+                    qualifiedName = classType.getTypeArguments().get().get(1).resolve().asReferenceType().getQualifiedName();
+                    return qualifiedName;
                 }
+
+            }
+
+            if (type.resolve().isReferenceType()) {
+                qualifiedName = type.resolve().asReferenceType().getQualifiedName();
                 return qualifiedName;
             }
 
@@ -213,20 +247,58 @@ public class LogicPositivizer {
         public void visit(AssignExpr assignExpr, Void arg) {
             super.visit(assignExpr, arg);
             try {
-
                 if (assignExpr.getTarget().isFieldAccessExpr()) {
                     FieldAccessExpr fieldAccessExpr = assignExpr.getTarget().asFieldAccessExpr();
+
                     if (fieldAccessExpr.resolve().getType().isReferenceType()) {
-                        String field = fieldAccessExpr.resolve().getType().asReferenceType().getQualifiedName();
-                        fields.add(field);
-                    }
-                } else if (assignExpr.getTarget().isNameExpr()) {
-                    // Todo: 对静态成员变量做处理
-                    NameExpr nameExpr = assignExpr.getTarget().asNameExpr();
-                    if (nameExpr.resolve().isField()) {
-                        fields.add(nameExpr.resolve().getType().asReferenceType().getQualifiedName());
+                        ResolvedReferenceType fieldType = fieldAccessExpr.resolve().getType().asReferenceType();
+                        if (implementsListOrSetInterface(fieldType)
+                                && !fieldType.typeParametersValues().isEmpty()
+                        ) {
+                            fields.add(fieldType.typeParametersValues().get(0).describe());
+                        } else if (implementsMapInterface(fieldType)
+                            && fieldType.typeParametersValues().size() >=2
+                        ) {
+                            fields.add(fieldType.typeParametersValues().get(1).describe());
+                        } else {
+                            String field = fieldType.getQualifiedName();
+                            fields.add(field);
+                        }
+                        return;
                     }
 
+                    if (fieldAccessExpr.resolve().getType().isArray()) {
+                        fields.add(fieldAccessExpr.resolve().getType().asArrayType().getComponentType().describe());
+                    }
+
+                    // Todo: 增加对泛型的处理
+
+                } else if (assignExpr.getTarget().isNameExpr()) {
+                    // Todo: 增加对数组及泛型的处理
+                    NameExpr nameExpr = assignExpr.getTarget().asNameExpr();
+                    if (nameExpr.resolve().isField()) {
+                        ResolvedType declaredType = nameExpr.resolve().getType();
+                        if (nameExpr.resolve().getType().isReferenceType()) {
+                            ResolvedReferenceType referenceType = nameExpr.resolve().getType().asReferenceType();
+                            if (implementsListOrSetInterface(referenceType)
+                                    && !referenceType.typeParametersValues().isEmpty()
+                            ) {
+                                fields.add(referenceType.typeParametersValues().get(0).describe());
+                            } else if (implementsMapInterface(referenceType)
+                                    && referenceType.typeParametersValues().size() >= 2
+                            ) {
+                                fields.add(referenceType.typeParametersValues().get(1).describe());
+                            } else {
+                                // 非泛型
+                                fields.add(referenceType.getQualifiedName());
+
+                            }
+                            return;
+                        }
+                        if (nameExpr.resolve().getType().isArray()) {
+                            fields.add(nameExpr.resolve().getType().asArrayType().getComponentType().describe());
+                        }
+                    }
                 }
             } catch (Exception e) {
                 System.err.println("Unable to resolve variable: " + e.getMessage() + " " + assignExpr);
@@ -275,14 +347,14 @@ public class LogicPositivizer {
                     if (!allClass.contains(field)) {
                         continue;
                     }
-                    if (!params.contains(field)) {
+                    if (params.contains(field)) {
                         // 赋值变量从函数参数中获取
-                        System.out.println("compose field: " + field);
-                        classInfo.AddComposition(field);
-                    } else {
-                        // 赋值变量未从函数参数中获取
                         System.out.println("aggregation field: " + field);
                         classInfo.AddAggregation(field);
+                    } else {
+                        // 赋值变量未从函数参数中获取
+                        System.out.println("compose field: " + field);
+                        classInfo.AddComposition(field);
                     }
                 }
 

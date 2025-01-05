@@ -1,4 +1,8 @@
 package packageName;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+
 class compose {
 
 }
@@ -34,9 +38,13 @@ class Tt extends ab implements testt {
     private aggre aggre;
     private asso asso;
     private ArrayType[] arrayTypes;
+    private ArrayList<testt> list;
 
-    public Tt() {
-        compose = new compose();
+    public Tt(ArrayType[] a1, ArrayList<testt> f1, HashMap<String, testt> ff) {
+        compose p = new compose();
+        compose = p;
+        arrayTypes = a1;
+        list = new ArrayList<>();
     }
 
     public void setAggre(aggre aggre) {
