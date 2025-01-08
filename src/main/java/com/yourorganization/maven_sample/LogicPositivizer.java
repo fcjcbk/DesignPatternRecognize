@@ -6,10 +6,7 @@ import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.AssignExpr;
-import com.github.javaparser.ast.expr.FieldAccessExpr;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.stmt.ExpressionStmt;
 import com.github.javaparser.ast.stmt.Statement;
 import com.github.javaparser.ast.type.ArrayType;
@@ -53,8 +50,8 @@ public class LogicPositivizer {
 
     public static void main(String[] args) throws FileNotFoundException {
 
-        String projectPath = "src/main/resources/mytest";
-//        String projectPath = "src/main/resources/design_pattern";
+//        String projectPath = "src/main/resources/mytest";
+        String projectPath = "src/main/resources/design_pattern";
 //        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
 //        String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
@@ -203,7 +200,7 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
     }
 
     private static class LocalVariableCollector extends VoidVisitorAdapter<Void> {
-        final private ArrayList<VariableDeclarator> variables = new java.util.ArrayList<>();
+        final private ArrayList<VariableDeclarator> variables = new ArrayList<>();
 
         @Override
         public void visit(VariableDeclarator n, Void arg) {
@@ -218,11 +215,18 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
 
     // 自定义访问者类，用于收集方法调用表达式
     private static class MethodCallVisitor extends VoidVisitorAdapter<ClassInfo> {
+        final private HashSet<String> fields = new HashSet<>();
+
+        public HashSet<String> getFields() {
+            return fields;
+        }
+
         @Override
         public void visit(MethodCallExpr methodCall, ClassInfo classInfo) {
             super.visit(methodCall, classInfo);
             try {
                 ResolvedMethodDeclaration resolvedMethodDecl = methodCall.resolve();
+                // static method call
                 if (resolvedMethodDecl.isStatic()) {
 //                System.out.println("Static method call found: " + methodCall.getName() + " in class " +
 //                        resolvedMethodDecl.declaringType().getQualifiedName());
@@ -231,6 +235,70 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                         return;
                     }
                     classInfo.CheckAndAddDependency(qualifiedName);
+                }
+                // list or set type add method call
+                if (methodCall.getNameAsString().equals("add")) {
+                    Expression expression = methodCall.getScope().orElse(null);
+                    if (expression == null) {
+                        return;
+                    }
+                    if (expression.isFieldAccessExpr()) {
+                        System.out.println("Hit list or set add method call: " + methodCall.getName() + " in class " +
+                                resolvedMethodDecl.declaringType().getQualifiedName());
+                        FieldAccessExpr fieldAccessExpr = expression.asFieldAccessExpr();
+
+                        if (fieldAccessExpr.resolve().getType().isReferenceType()) {
+                            ResolvedReferenceType fieldType = fieldAccessExpr.resolve().getType().asReferenceType();
+                            if (implementsListOrSetInterface(fieldType)
+                                    && !fieldType.typeParametersValues().isEmpty()
+                            ) {
+                                fields.add(fieldType.typeParametersValues().get(0).describe());
+                            }
+                        }
+                    } else if (expression.isNameExpr()) {
+                        if (expression.asNameExpr().resolve().isField()) {
+                            NameExpr nameExpr = expression.asNameExpr();
+                            if (nameExpr.resolve().isField()) {
+                                ResolvedType declaredType = nameExpr.resolve().getType();
+                                if (declaredType.isReferenceType()) {
+                                    ResolvedReferenceType referenceType = declaredType.asReferenceType();
+                                    if (implementsListOrSetInterface(referenceType)
+                                            && !referenceType.typeParametersValues().isEmpty()
+                                    ) {
+                                        fields.add(referenceType.typeParametersValues().get(0).describe());
+                                    }
+                                }
+                            }
+
+                        }
+                    }
+                } else if (methodCall.getNameAsString().equals("put")) {
+                    Expression expression = methodCall.getScope().orElse(null);
+                    if (expression == null) {
+                        return;
+                    }
+                    if (expression.isFieldAccessExpr()) {
+                        FieldAccessExpr fieldAccessExpr = expression.asFieldAccessExpr();
+                        ResolvedReferenceType fieldType = fieldAccessExpr.resolve().getType().asReferenceType();
+                        if (implementsMapInterface(fieldType)
+                                && fieldType.typeParametersValues().size() >=2
+                        ) {
+                            fields.add(fieldType.typeParametersValues().get(1).describe());
+                        }
+                    } else if (expression.isNameExpr()) {
+                        NameExpr nameExpr = expression.asNameExpr();
+                        if (nameExpr.resolve().isField()) {
+                            ResolvedType declaredType = nameExpr.resolve().getType();
+                            if (declaredType.isReferenceType()) {
+                                ResolvedReferenceType referenceType = declaredType.asReferenceType();
+                                if (implementsMapInterface(referenceType)
+                                        && referenceType.typeParametersValues().size() >= 2
+                                ) {
+                                    fields.add(referenceType.typeParametersValues().get(1).describe());
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (Exception e) {
                 System.err.println("Unable to resolve method call: " + e.getMessage() + " " + methodCall);
@@ -278,8 +346,8 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                     NameExpr nameExpr = assignExpr.getTarget().asNameExpr();
                     if (nameExpr.resolve().isField()) {
                         ResolvedType declaredType = nameExpr.resolve().getType();
-                        if (nameExpr.resolve().getType().isReferenceType()) {
-                            ResolvedReferenceType referenceType = nameExpr.resolve().getType().asReferenceType();
+                        if (declaredType.isReferenceType()) {
+                            ResolvedReferenceType referenceType = declaredType.asReferenceType();
                             if (implementsListOrSetInterface(referenceType)
                                     && !referenceType.typeParametersValues().isEmpty()
                             ) {
@@ -295,8 +363,9 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                             }
                             return;
                         }
-                        if (nameExpr.resolve().getType().isArray()) {
-                            fields.add(nameExpr.resolve().getType().asArrayType().getComponentType().describe());
+                        if (declaredType.isArray()) {
+                            fields.add(declaredType.asArrayType().getComponentType().describe());
+                            return;
                         }
                     }
                 }
@@ -341,8 +410,16 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                     }
                 });
 
+                // 获取依赖关系中静态函数调用, 同时获取对于 list or map 的依赖
+                MethodCallVisitor methodCallVisitor = new MethodCallVisitor();
+                constructor.accept(methodCallVisitor, classInfo);
+
                 AssignExprVisitor assignExprVisitor = new AssignExprVisitor();
                 constructor.accept(assignExprVisitor, null);
+
+                HashSet<String> fields = assignExprVisitor.getFields();
+                fields.addAll(methodCallVisitor.getFields());
+
                 for (String field : assignExprVisitor.getFields()) {
                     if (!allClass.contains(field)) {
                         continue;
@@ -405,8 +482,16 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                     }
                 });
 
+                // 获取依赖关系中静态函数调用, 同时获取对于 list or map 的依赖
+                MethodCallVisitor methodCallVisitor = new MethodCallVisitor();
+                method.accept(methodCallVisitor, classInfo);
+
                 AssignExprVisitor assignExprVisitor = new AssignExprVisitor();
                 method.accept(assignExprVisitor, null);
+
+                HashSet<String> fields = assignExprVisitor.getFields();
+                fields.addAll(methodCallVisitor.getFields());
+
                 for (String field : assignExprVisitor.getFields()) {
                     if (!allClass.contains(field)) {
                         continue;
@@ -430,9 +515,6 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                     classInfo.CheckAndAddDependency(param);
 
                 }
-
-                // 获取依赖关系中静态函数调用
-                method.accept(new MethodCallVisitor(), classInfo);
 
                 // 获取依赖关系中局部变量
                 LocalVariableCollector collector = new LocalVariableCollector();
