@@ -131,6 +131,9 @@ public class LogicPositivizer {
 
 private static boolean implementsListOrSetInterface(ResolvedReferenceType resolvedType) {
 //        System.out.println(resolvedType.getQualifiedName() + " ancestor: ");
+        if (resolvedType.getQualifiedName().equals(List.class.getName())) {
+            return true;
+        }
         for (ResolvedReferenceType ancestor : resolvedType.getAllAncestors()) {
 //            System.out.println(ancestor.getQualifiedName());
             if (ancestor.getQualifiedName().equals(List.class.getCanonicalName())
@@ -143,6 +146,9 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
 
     private static boolean implementsMapInterface(ResolvedReferenceType resolvedType) {
 //        System.out.println(resolvedType.getQualifiedName() + " ancestor: ");
+        if (resolvedType.getQualifiedName().equals(Map.class.getCanonicalName())) {
+            return true;
+        }
         for (ResolvedReferenceType ancestor : resolvedType.getAllAncestors()) {
 //            System.out.println(ancestor.getQualifiedName());
             if (ancestor.getQualifiedName().equals(Map.class.getCanonicalName())) {
