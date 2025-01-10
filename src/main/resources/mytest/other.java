@@ -1,12 +1,15 @@
 package example.b;
 import java.util.ArrayList;
 
-class Foo {
+interface FooInterface {
+
+}
+class Foo implements FooInterface {
 
 }
 class Good {
     // 成员变量
-    ArrayList<Foo> list = new ArrayList<>();
+    ArrayList<FooInterface> list = new ArrayList<>();
     public void add(int num) {
         // 局部变量
         ArrayList<Integer> list = new ArrayList<>();
@@ -16,6 +19,8 @@ class Good {
 
     public void add2() {
         // 调用成员变量的add
+        Foo foo = new Foo();
+//        list.add(foo);
         list.add(new Foo());
     }
 }

@@ -50,8 +50,8 @@ public class LogicPositivizer {
 
     public static void main(String[] args) throws FileNotFoundException {
 
-//        String projectPath = "src/main/resources/mytest";
-        String projectPath = "src/main/resources/design_pattern";
+        String projectPath = "src/main/resources/mytest";
+//        String projectPath = "src/main/resources/design_pattern";
 //        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
 //        String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
@@ -263,6 +263,14 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                         }
                     } else if (expression.isNameExpr()) {
                         if (expression.asNameExpr().resolve().isField()) {
+
+                            methodCall.getArguments().getFirst().ifPresent(arg -> {
+                                String name = arg.asObjectCreationExpr().resolve().getQualifiedName();
+                                ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
+                                System.out.println(referenceType.getQualifiedName());
+
+                            });
+
                             NameExpr nameExpr = expression.asNameExpr();
                             if (nameExpr.resolve().isField()) {
                                 ResolvedType declaredType = nameExpr.resolve().getType();
@@ -284,6 +292,10 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                         return;
                     }
                     if (expression.isFieldAccessExpr()) {
+                        methodCall.getArguments().getFirst().ifPresent(arg -> {
+                           ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
+                            System.out.println(referenceType.getQualifiedName());
+                        });
                         FieldAccessExpr fieldAccessExpr = expression.asFieldAccessExpr();
                         ResolvedReferenceType fieldType = fieldAccessExpr.resolve().getType().asReferenceType();
                         if (implementsMapInterface(fieldType)
@@ -292,6 +304,11 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                             fields.add(fieldType.typeParametersValues().get(1).describe());
                         }
                     } else if (expression.isNameExpr()) {
+                        methodCall.getArguments().getFirst().ifPresent(arg -> {
+                            ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
+                            System.out.println(referenceType.getQualifiedName());
+                        });
+
                         NameExpr nameExpr = expression.asNameExpr();
                         if (nameExpr.resolve().isField()) {
                             ResolvedType declaredType = nameExpr.resolve().getType();
