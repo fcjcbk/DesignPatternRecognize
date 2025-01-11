@@ -98,7 +98,7 @@ public class LogicPositivizer {
                 cu.findAll(ClassOrInterfaceDeclaration.class).forEach(clazz -> {
                     String className = clazz.resolve().getQualifiedName();
                     allClass.add(className);
-                    System.out.println("Class: " + className);
+//                    System.out.println("Class: " + className);
 
                 });
 
@@ -250,15 +250,30 @@ public class LogicPositivizer {
     }
 
     private static class LocalVariableCollector extends VoidVisitorAdapter<Void> {
-        final private ArrayList<VariableDeclarator> variables = new ArrayList<>();
+        final private ArrayList<String> variables = new ArrayList<>();
 
         @Override
         public void visit(VariableDeclarator n, Void arg) {
             super.visit(n, arg);
-            variables.add(n);
+            String qualifiedName = getQualifiedName(n.getType());
+            if (!allClass.contains(qualifiedName)) {
+                return;
+            }
+            variables.add(qualifiedName);
         }
 
-        public ArrayList<VariableDeclarator> getVariables() {
+        @Override
+        public void visit(ObjectCreationExpr n, Void arg) {
+            super.visit(n, arg);
+            String qualifiedName = n.calculateResolvedType().asReferenceType().getQualifiedName();
+            if (!allClass.contains(qualifiedName)) {
+                return;
+            }
+            variables.add(qualifiedName);
+
+        }
+
+        public ArrayList<String> getVariables() {
             return variables;
         }
     }
@@ -525,17 +540,12 @@ public class LogicPositivizer {
                 LocalVariableCollector collector = new LocalVariableCollector();
                 constructor.accept(collector, null);
                 // 获取所有局部变量声明
-                ArrayList<VariableDeclarator> variables = collector.getVariables();
-                for (VariableDeclarator var : variables) {
-                    try {
-                        String qualifiedName = getQualifiedName(var.getType());
-                        if (!allClass.contains(qualifiedName)) {
-                            continue;
-                        }
-                        classInfo.CheckAndAddDependency(qualifiedName);
-                    } catch (UnsolvedSymbolException e) {
-                        System.err.println("Unable to resolve variable: " + e.getMessage() + " " + var);
+                ArrayList<String> variables = collector.getVariables();
+                for (String var : variables) {
+                    if (!allClass.contains(var)) {
+                        continue;
                     }
+                    classInfo.CheckAndAddDependency(var);
                 }
 
             });
@@ -594,17 +604,12 @@ public class LogicPositivizer {
                 LocalVariableCollector collector = new LocalVariableCollector();
                 method.accept(collector, null);
                 // 获取所有局部变量声明
-                ArrayList<VariableDeclarator> variables = collector.getVariables();
-                for (VariableDeclarator var : variables) {
-                    try {
-                        String qualifiedName = getQualifiedName(var.getType());
-                        if (!allClass.contains(qualifiedName)) {
-                            continue;
-                        }
-                        classInfo.CheckAndAddDependency(qualifiedName);
-                    } catch (UnsolvedSymbolException e) {
-                        System.err.println("Unable to resolve variable: " + e.getMessage() + " " + var);
+                ArrayList<String> variables = collector.getVariables();
+                for (String var : variables) {
+                    if (!allClass.contains(var)) {
+                        continue;
                     }
+                    classInfo.CheckAndAddDependency(var);
                 }
             });
 
