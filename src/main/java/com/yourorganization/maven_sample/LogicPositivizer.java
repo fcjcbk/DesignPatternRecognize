@@ -23,9 +23,7 @@ import com.github.javaparser.symbolsolver.resolution.typesolvers.CombinedTypeSol
 import com.github.javaparser.symbolsolver.resolution.typesolvers.JavaParserTypeSolver;
 import com.github.javaparser.symbolsolver.resolution.typesolvers.ReflectionTypeSolver;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.*;
 import java.util.*;
 
 public class LogicPositivizer {
@@ -48,10 +46,38 @@ public class LogicPositivizer {
         return resultList;
     }
 
+    private static Map<String, Node> buildPackageTree(Set<String> classNames) {
+        Map<String, Node> root = new HashMap<>();
+        for (String className : classNames) {
+            String[] parts = className.split("\\.");
+            Map<String, Node> current = root;
+            for (int i = 0; i < parts.length; i++) {
+                String part = parts[i];
+                if (!current.containsKey(part)) {
+                    current.put(part, new Node(part));
+                }
+                if (i == parts.length - 1) {
+                    current.get(part).isClass = true;
+                }
+                current = current.get(part).children;
+            }
+        }
+        return root;
+    }
+
+    private static void printPackageTree(Map<String, Node> tree, String prefix, String currentPackage, BufferedWriter writer) throws IOException {
+        for (Node node : tree.values()) {
+            String newPrefix = prefix + (node.isClass ? "├── " : "│   ");
+            writer.write(prefix + (node.isClass ? "├── " : "│   ") + node.name);
+            writer.newLine();
+            printPackageTree(node.children, newPrefix, currentPackage + node.name + ".", writer);
+        }
+    }
+
     public static void main(String[] args) throws FileNotFoundException {
 
-        String projectPath = "src/main/resources/mytest";
-//        String projectPath = "src/main/resources/design_pattern";
+//        String projectPath = "src/main/resources/mytest";
+        String projectPath = "src/main/resources/design_pattern";
 //        String projectPath = "D:\\codefile\\Java\\myPaint\\Paint\\src";
 //        String projectPath = "D:\\codefile\\Java\\springboot-seckill\\src\\main\\java";
 
@@ -104,6 +130,13 @@ public class LogicPositivizer {
         System.out.println("class size: " + classMap.size());
 //        FieldDeclaration fieldDeclaration  = Navigator.demandNodeOfGivenClass(cu, FieldDeclaration.class);
 //        System.out.println(fieldDeclaration.getVariables().get(0).getType().resolve().asReferenceType().getQualifiedName());
+
+        Map<String, Node> packageTree = buildPackageTree(allClass);
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter("output/output.txt"))) {
+            printPackageTree(packageTree, "", "", writer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
     private static void checkStatementAndAddAggregation(Statement statement, ClassInfo classInfo, String paramType) {
@@ -129,7 +162,7 @@ public class LogicPositivizer {
 
     }
 
-private static boolean implementsListOrSetInterface(ResolvedReferenceType resolvedType) {
+    private static boolean implementsListOrSetInterface(ResolvedReferenceType resolvedType) {
 //        System.out.println(resolvedType.getQualifiedName() + " ancestor: ");
         if (resolvedType.getQualifiedName().equals(List.class.getName())) {
             return true;
@@ -163,26 +196,27 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
         try {
             // 处理泛型
             // 泛型取第一个处理
-            if (type.isClassOrInterfaceType()) {
-                ClassOrInterfaceType classType = type.asClassOrInterfaceType();
-                if (implementsListOrSetInterface(type.resolve().asReferenceType())
-                        && classType.getTypeArguments().isPresent()
-                        && classType.getTypeArguments().get().getFirst().isPresent()
-                ) {
+            if (type.resolve().isReferenceType()) {
+
+                if (type.isClassOrInterfaceType()) {
+                    ClassOrInterfaceType classType = type.asClassOrInterfaceType();
+                    if (implementsListOrSetInterface(type.resolve().asReferenceType())
+                            && classType.getTypeArguments().isPresent()
+                            && classType.getTypeArguments().get().getFirst().isPresent()
+                    ) {
                         qualifiedName = classType.getTypeArguments().get().getFirst().get().resolve().asReferenceType().getQualifiedName();
                         return qualifiedName;
 
-                } else if (implementsMapInterface(type.resolve().asReferenceType())
-                        && classType.getTypeArguments().isPresent()
-                        && classType.getTypeArguments().get().size() >= 2
-                ) {
-                    qualifiedName = classType.getTypeArguments().get().get(1).resolve().asReferenceType().getQualifiedName();
-                    return qualifiedName;
+                    } else if (implementsMapInterface(type.resolve().asReferenceType())
+                            && classType.getTypeArguments().isPresent()
+                            && classType.getTypeArguments().get().size() >= 2
+                    ) {
+                        qualifiedName = classType.getTypeArguments().get().get(1).resolve().asReferenceType().getQualifiedName();
+                        return qualifiedName;
+                    }
+
                 }
 
-            }
-
-            if (type.resolve().isReferenceType()) {
                 qualifiedName = type.resolve().asReferenceType().getQualifiedName();
                 return qualifiedName;
             }
@@ -203,6 +237,16 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
         }
         // not found
         return "not_found";
+    }
+
+    static class Node {
+        String name;
+        boolean isClass;
+        Map<String, Node> children = new HashMap<>();
+
+        Node(String name) {
+            this.name = name;
+        }
     }
 
     private static class LocalVariableCollector extends VoidVisitorAdapter<Void> {
@@ -264,12 +308,13 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                     } else if (expression.isNameExpr()) {
                         if (expression.asNameExpr().resolve().isField()) {
 
-                            methodCall.getArguments().getFirst().ifPresent(arg -> {
-                                String name = arg.asObjectCreationExpr().resolve().getQualifiedName();
-                                ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
-                                System.out.println(referenceType.getQualifiedName());
-
-                            });
+                            // 暂时不需要处理参数类型
+//                            methodCall.getArguments().getFirst().ifPresent(arg -> {
+//                                String name = arg.asObjectCreationExpr().resolve().getQualifiedName();
+//                                ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
+//                                System.out.println(referenceType.getQualifiedName());
+//
+//                            });
 
                             NameExpr nameExpr = expression.asNameExpr();
                             if (nameExpr.resolve().isField()) {
@@ -293,21 +338,23 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                     }
                     if (expression.isFieldAccessExpr()) {
                         methodCall.getArguments().getFirst().ifPresent(arg -> {
-                           ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
+                            ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
                             System.out.println(referenceType.getQualifiedName());
                         });
                         FieldAccessExpr fieldAccessExpr = expression.asFieldAccessExpr();
                         ResolvedReferenceType fieldType = fieldAccessExpr.resolve().getType().asReferenceType();
                         if (implementsMapInterface(fieldType)
-                                && fieldType.typeParametersValues().size() >=2
+                                && fieldType.typeParametersValues().size() >= 2
                         ) {
                             fields.add(fieldType.typeParametersValues().get(1).describe());
                         }
                     } else if (expression.isNameExpr()) {
-                        methodCall.getArguments().getFirst().ifPresent(arg -> {
-                            ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
-                            System.out.println(referenceType.getQualifiedName());
-                        });
+
+                        // 暂时不需要处理参数类型
+//                        methodCall.getArguments().getFirst().ifPresent(arg -> {
+//                            ResolvedReferenceType referenceType = arg.asNameExpr().resolve().getType().asReferenceType();
+//                            System.out.println(referenceType.getQualifiedName());
+//                        });
 
                         NameExpr nameExpr = expression.asNameExpr();
                         if (nameExpr.resolve().isField()) {
@@ -348,7 +395,7 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
                         ) {
                             fields.add(fieldType.typeParametersValues().get(0).describe());
                         } else if (implementsMapInterface(fieldType)
-                            && fieldType.typeParametersValues().size() >=2
+                                && fieldType.typeParametersValues().size() >= 2
                         ) {
                             fields.add(fieldType.typeParametersValues().get(1).describe());
                         } else {
@@ -415,6 +462,10 @@ private static boolean implementsListOrSetInterface(ResolvedReferenceType resolv
 
             ClassInfo classInfo = new ClassInfo(className);
             arg.put(className, classInfo);
+
+            if (n.isInterface()) {
+                return;
+            }
 
             // 获取聚合类型 同时寻找依赖类型: 1. 使用其他类的静态方法 (done) 2. 接受其他类作为函数参数(done) 3. 使用其他类的局部变量 (done)
 
