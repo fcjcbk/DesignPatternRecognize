@@ -28,7 +28,7 @@ import java.util.*;
 
 public class LogicPositivizer {
     // 收集局部变量的访问者类
-    private static HashSet<String> allClass = new HashSet<>();
+    private static Set<String> allClass = new HashSet<>();
     final String NOT_FOUND = "not_found";
 
     private static ArrayList<File> listJavaFilesRecursively(File directory) {
@@ -134,6 +134,69 @@ public class LogicPositivizer {
         Map<String, Node> packageTree = buildPackageTree(allClass);
         try (BufferedWriter writer = new BufferedWriter(new FileWriter("output/output.txt"))) {
             printPackageTree(packageTree, "", "", writer);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        try (BufferedWriter write = new BufferedWriter(new FileWriter("output/class_uml.puml"))) {
+            write.write("@startuml\n");
+            for (String className : allClass) {
+                write.write("class " + className + " {\n" + "}\n");
+                write.newLine();
+            }
+
+            classMap.values().forEach(classInfo -> {
+                classInfo.getAssociations().forEach(className -> {
+                    try {
+                        write.write(classInfo.getClassName() + " --> " + className + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                classInfo.getAggregations().forEach(className -> {
+                    try {
+                        write.write(classInfo.getClassName() + " o-- " + className + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                classInfo.getCompositions().forEach(className -> {
+                    try {
+                        write.write(classInfo.getClassName() + " *-- " + className + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                classInfo.getImplementors().forEach(className -> {
+                    try {
+                        write.write(classInfo.getClassName() + " <|.. " + className + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                classInfo.getExtendTypes().forEach(className -> {
+                    try {
+                        write.write(classInfo.getClassName() + " <|-- " + className + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                classInfo.getDependency().forEach(className -> {
+                    try {
+                        write.write(classInfo.getClassName() + " ..> " + className + "\n");
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+            });
+
+            write.write("@enduml\n");
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -265,11 +328,16 @@ public class LogicPositivizer {
         @Override
         public void visit(ObjectCreationExpr n, Void arg) {
             super.visit(n, arg);
-            String qualifiedName = n.calculateResolvedType().asReferenceType().getQualifiedName();
-            if (!allClass.contains(qualifiedName)) {
-                return;
+            try {
+
+                String qualifiedName = n.calculateResolvedType().asReferenceType().getQualifiedName();
+                if (!allClass.contains(qualifiedName)) {
+                    return;
+                }
+                variables.add(qualifiedName);
+            } catch (UnsolvedSymbolException e) {
+                System.err.println("Unable to resolve parameter: " + e.getMessage() + " " + n);
             }
-            variables.add(qualifiedName);
 
         }
 
